@@ -65,6 +65,36 @@ impl Client {
         )
     }
 
+    pub fn create_dns_record(
+        &self,
+        zone_identifier: &str,
+        name: &str,
+        content: &str,
+        type_: &str,
+    ) -> Result<DnsRecord> {
+        #[derive(Debug, Serialize)]
+        struct CreateDnsRecordBody<'a> {
+            pub content: &'a str,
+            pub name: &'a str,
+            #[serde(rename = "type")]
+            pub type_: &'a str,
+            pub ttl: &'a u16,
+        }
+
+        let ttl: &u16 = &300;
+        self.request(
+            Method::POST,
+            &format!("zones/{}/dns_records", zone_identifier),
+            None::<()>,
+            Some(CreateDnsRecordBody {
+                content,
+                name,
+                type_,
+                ttl,
+            }),
+        )
+    }
+
     fn request<ResultType, QueryType, BodyType>(
         &self,
         method: Method,
