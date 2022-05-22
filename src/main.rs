@@ -1,4 +1,4 @@
-use ::log::{info, LevelFilter};
+use ::log::{error, info, LevelFilter};
 use anyhow::{anyhow, Context, Result};
 use std::env;
 use std::fs::File;
@@ -19,16 +19,22 @@ const IPV6_TYPE: &str = "AAAA";
 fn main() -> Result<()> {
     log::init(LevelFilter::Info).context("Failed to initialize logger")?;
 
+    let token = env::var(API_TOKEN_ENV_VAR).context("Failed to find env API_TOKEN")?;
+    let domain = env::var(DOMAIN_ENV_VAR).context("Failed to find env DOMAIN")?;
+
     let ipv4_address = ip::query::<Ipv4Addr>()
         .context("Failed to get IPv4 address")?
         .to_string();
 
-    let ipv6_address = ip::query::<Ipv6Addr>()
-        .context("Failed to get IPv6 address")?
-        .to_string();
+    let ipv6_address = match ip::query::<Ipv6Addr>() {
+        Ok(ip) => ip.to_string(),
+        Err(err) => {
+            error!("Failed to get IPv6 address: {}", err.to_string());
+            Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0).to_string()
+        }
+    };
 
-    let token = env::var(API_TOKEN_ENV_VAR).context("Failed to find env API_TOKEN")?;
-    let domain = env::var(DOMAIN_ENV_VAR).context("Failed to find env DOMAIN")?;
+    info!("My IP addresses are: {}, {}", ipv4_address, ipv6_address);
 
     let file_cache = env::var(FILE_CACHE_ENV_VAR).unwrap_or(FILE_DEFAULT.to_string());
 
@@ -69,10 +75,12 @@ fn main() -> Result<()> {
             .create_dns_record(&zone.id, &domain, &ipv4_address, IPV4_TYPE)
             .context(format!("Failed to create DNS record {}", domain))?;
         info!("Created record {} with value {}", domain, ipv4_address);
-        client
-            .create_dns_record(&zone.id, &domain, &ipv6_address, IPV6_TYPE)
-            .context(format!("Failed to create DNS record {}", domain))?;
-        info!("Created record {} with value {}", domain, ipv6_address);
+        if ipv6_address != "::" {
+            client
+                .create_dns_record(&zone.id, &domain, &ipv6_address, IPV6_TYPE)
+                .context(format!("Failed to create DNS record {}", domain))?;
+            info!("Created record {} with value {}", domain, ipv6_address);
+        }
         created = true;
     }
 
